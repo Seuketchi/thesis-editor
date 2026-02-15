@@ -199,35 +199,35 @@ const generateTocFile = (
     // 1. Process nested files
     const inputMatches = [...cleanContent.matchAll(/\\(input|include)\{([^}]+)\}/g)];
     for (const match of inputMatches) {
-        let ref = match[2].trim();
-        if (!ref.endsWith('.tex')) ref += '.tex';
-        const file = pathToFile.get(ref) || pathToFile.get(ref.split('/').pop() || '');
-        if (file?.content) {
-          processContent(file.content, ref);
-        }
+      let ref = match[2].trim();
+      if (!ref.endsWith('.tex')) ref += '.tex';
+      const file = pathToFile.get(ref) || pathToFile.get(ref.split('/').pop() || '');
+      if (file?.content) {
+        processContent(file.content, ref);
+      }
     }
 
     // 2. Extract headings (handling multi-line)
     const headingMatches = [...cleanContent.matchAll(/\\(chapter|section|subsection)\*?\{([\s\S]*?)\}/g)];
     for (const match of headingMatches) {
-        const type = match[1];
-        const title = match[2].trim().replace(/\s+/g, ' ');
+      const type = match[1];
+      const title = match[2].trim().replace(/\s+/g, ' ');
 
-        if (type === 'chapter') {
-            chapterNum++;
-            sectionNum = 0;
-            subsectionNum = 0;
-            pageNum += 2;
-            tocEntries.push(`\\contentsline {chapter}{\\numberline {${chapterNum}}${title}}{${pageNum}}{chapter.${chapterNum}}`);
-        } else if (type === 'section') {
-            sectionNum++;
-            subsectionNum = 0;
-            pageNum++;
-            tocEntries.push(`\\contentsline {section}{\\numberline {${chapterNum}.${sectionNum}}${title}}{${pageNum}}{section.${chapterNum}.${sectionNum}}`);
-        } else if (type === 'subsection') {
-            subsectionNum++;
-            tocEntries.push(`\\contentsline {subsection}{\\numberline {${chapterNum}.${sectionNum}.${subsectionNum}}${title}}{${pageNum}}{subsection.${chapterNum}.${sectionNum}.${subsectionNum}}`);
-        }
+      if (type === 'chapter') {
+        chapterNum++;
+        sectionNum = 0;
+        subsectionNum = 0;
+        pageNum += 2;
+        tocEntries.push(`\\contentsline {chapter}{\\numberline {${chapterNum}}${title}}{${pageNum}}{chapter.${chapterNum}}`);
+      } else if (type === 'section') {
+        sectionNum++;
+        subsectionNum = 0;
+        pageNum++;
+        tocEntries.push(`\\contentsline {section}{\\numberline {${chapterNum}.${sectionNum}}${title}}{${pageNum}}{section.${chapterNum}.${sectionNum}}`);
+      } else if (type === 'subsection') {
+        subsectionNum++;
+        tocEntries.push(`\\contentsline {subsection}{\\numberline {${chapterNum}.${sectionNum}.${subsectionNum}}${title}}{${pageNum}}{subsection.${chapterNum}.${sectionNum}.${subsectionNum}}`);
+      }
     }
   };
 
@@ -418,161 +418,214 @@ const compileWithYtoTech = async (
   throw new Error(`Invalid response: ${text.slice(0, 200)}`);
 };
 
-// Local LaTeX WASM engine state
-let pdfTeXEngine: any = null;
+// Local LaTeX WASM engine state (texlyre-busytex)
+let busyTexRunner: any = null;
+let busyTexPdfLatex: any = null;
 let engineInitPromise: Promise<void> | null = null;
 let engineInitFailed = false;
 
-// CDN URLs to try for the SwiftLaTeX engine (in order of preference)
-const ENGINE_CDNS = [
-  // Official SwiftLaTeX website
-  'https://www.swiftlatex.com/PdfTeXEngine.js',
-  // GitHub Pages fallback
-  'https://nicola.github.io/nicola-swiftlatex/PdfTeXEngine.js',
-  // jsDelivr CDN (if available)
-  'https://cdn.jsdelivr.net/gh/nicola/nicola-swiftlatex@latest/PdfTeXEngine.js',
-];
-
-// Load script with timeout
-const loadScript = (url: string, timeout: number = 10000): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = url;
-
-    const timeoutId = setTimeout(() => {
-      script.remove();
-      reject(new Error(`Timeout loading ${url}`));
-    }, timeout);
-
-    script.onload = () => {
-      clearTimeout(timeoutId);
-      resolve();
-    };
-    script.onerror = () => {
-      clearTimeout(timeoutId);
-      script.remove();
-      reject(new Error(`Failed to load ${url}`));
-    };
-    document.head.appendChild(script);
-  });
-};
-
-// Initialize the local LaTeX engine
+// Initialize the local LaTeX engine using texlyre-busytex
 const initLocalEngine = async (onProgress?: (msg: string) => void): Promise<void> => {
-  if (pdfTeXEngine) return;
+  if (busyTexRunner?.isInitialized?.()) return;
   if (engineInitFailed) {
     throw new Error('Local LaTeX engine previously failed to initialize. Please use Cloud API mode.');
   }
   if (engineInitPromise) return engineInitPromise;
 
   engineInitPromise = (async () => {
-    onProgress?.('Initializing local LaTeX engine...');
+    onProgress?.('Initializing TeX Live 2025 WASM engine...');
 
-    // Try each CDN URL until one works
-    let loadError: Error | null = null;
-    for (const cdnUrl of ENGINE_CDNS) {
-      try {
-        onProgress?.(`Trying to load engine from CDN...`);
-        await loadScript(cdnUrl, 15000);
-
-        // Check if the engine is available
-        if ((window as any).PdfTeXEngine) {
-          break;
-        }
-      } catch (e) {
-        loadError = e as Error;
-        console.warn(`Failed to load from ${cdnUrl}:`, e);
-        continue;
-      }
-    }
-
-    if (!(window as any).PdfTeXEngine) {
-      engineInitFailed = true;
-      throw new Error(
-        'Local LaTeX engine is not available. This could be due to:\n' +
-        '• Network connectivity issues\n' +
-        '• CDN service unavailable\n' +
-        '• Browser blocking the script\n\n' +
-        'Please switch to Cloud API mode in Settings.'
-      );
-    }
-
-    onProgress?.('Loading engine (this may take a moment on first run)...');
-
-    // Create and compile the engine
     try {
-      pdfTeXEngine = new (window as any).PdfTeXEngine();
-      await pdfTeXEngine.loadEngine();
+      // Dynamic import to avoid bundling issues
+      const busytex = await import('texlyre-busytex');
+      const { BusyTexRunner, PdfLatex } = busytex;
+
+      onProgress?.('Loading engine (this may take a moment on first run)...');
+
+      busyTexRunner = new BusyTexRunner({
+        busytexBasePath: '/core/busytex',
+        verbose: false,
+      });
+
+      // Initialize with Web Worker for non-blocking compilation
+      await busyTexRunner.initialize(true);
+      busyTexPdfLatex = new PdfLatex(busyTexRunner);
+
       onProgress?.('Local LaTeX engine ready');
     } catch (e) {
       engineInitFailed = true;
-      pdfTeXEngine = null;
-      throw new Error('Failed to initialize LaTeX engine: ' + (e as Error).message);
+      busyTexRunner = null;
+      busyTexPdfLatex = null;
+      engineInitPromise = null;
+
+      const errorMsg = (e as Error).message || String(e);
+      if (errorMsg.includes('fetch') || errorMsg.includes('404') || errorMsg.includes('network')) {
+        throw new Error(
+          'Local LaTeX engine WASM files not found.\n\n' +
+          'Run this command to download them:\n' +
+          '  npx texlyre-busytex download-assets ./public/core\n\n' +
+          'Or switch to Cloud API mode in Settings.'
+        );
+      }
+      throw new Error('Failed to initialize local LaTeX engine: ' + errorMsg);
     }
   })();
 
   return engineInitPromise;
 };
 
-// Compile using local SwiftLaTeX WASM engine
+// Compile using local texlyre-busytex WASM engine
 const compileWithLocal = async (
   resources: Array<{ path?: string; main?: boolean; content?: string; file?: string }>,
   onProgress?: (msg: string) => void
 ): Promise<Blob> => {
   await initLocalEngine(onProgress);
 
-  if (!pdfTeXEngine) {
+  if (!busyTexPdfLatex) {
     throw new Error('Local LaTeX engine failed to initialize');
   }
 
-  onProgress?.('Writing files to virtual filesystem...');
+  onProgress?.('Preparing files for local compilation...');
 
   // Find the main file
   const mainResource = resources.find(r => r.main);
-  if (!mainResource || !mainResource.path) {
+  if (!mainResource?.content) {
     throw new Error('No main LaTeX file specified');
   }
 
-  // Write all files to the engine's virtual filesystem
-  for (const resource of resources) {
-    if (!resource.path) continue;
+  // Strip font packages not available in the WASM bundle (Times, Palatino, etc.)
+  // Local WASM bundle lacks Times/PSfont TFM files — strip known unavailable font packages.
+  const UNAVAILABLE_FONT_PACKAGES = /\\usepackage(\[[^\]]*\])?\{(times|mathptmx|palatino|mathpazo|helvet|courier|avant|bookman|newcent|charter)\}/g;
+  mainResource.content = mainResource.content.replace(UNAVAILABLE_FONT_PACKAGES, (match) => `% [local mode: ${match} removed — font not available offline]`);
 
-    if (resource.content) {
-      // Text file
-      pdfTeXEngine.writeMemFSFile(resource.path, resource.content);
-    } else if (resource.file) {
-      // Binary file (base64)
-      const binaryString = atob(resource.file);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+  // IEEEtran directly calls \usefont{OT1}{ptm}{...} which requires ptm TFM files not in the
+  // WASM bundle. Alias ptm → CM fonts via \DeclareFontShape so the request resolves locally.
+  if (/\\documentclass[^{]*\{IEEEtran\}/.test(mainResource.content)) {
+    const ptmAlias = [
+      '\\makeatletter',
+      '\\DeclareFontFamily{OT1}{ptm}{}',
+      '\\DeclareFontShape{OT1}{ptm}{m}{n}{<->cmr10}{}',
+      '\\DeclareFontShape{OT1}{ptm}{m}{it}{<->cmti10}{}',
+      '\\DeclareFontShape{OT1}{ptm}{m}{sl}{<->cmsl10}{}',
+      '\\DeclareFontShape{OT1}{ptm}{b}{n}{<->cmbx10}{}',
+      '\\DeclareFontShape{OT1}{ptm}{b}{it}{<->cmbxti10}{}',
+      '\\DeclareFontShape{OT1}{ptm}{bx}{n}{<->cmbx10}{}',
+      '\\makeatother',
+    ].join('\n');
+    mainResource.content = mainResource.content.replace(
+      /\\begin\{document\}/,
+      `${ptmAlias}\n\\begin{document}`
+    );
+  }
+
+  // Build additional files array for texlyre-busytex
+  const additionalFiles: Array<{ path: string; content: string }> = [];
+  let hasBib = false;
+
+  // Provide a fake ot1ptm.fd that aliases Times (ptm) to Computer Modern.
+  // LaTeX loads .fd files lazily on first font use — our version is found first,
+  // intercepting IEEEtran's Times request before the WASM bundle's version.
+  if (/\\documentclass[^{]*\{IEEEtran\}/.test(mainResource.content)) {
+    additionalFiles.push({
+      path: 'ot1ptm.fd',
+      content: [
+        '\\ProvidesFile{ot1ptm.fd}',
+        '\\DeclareFontFamily{OT1}{ptm}{}',
+        '\\DeclareFontShape{OT1}{ptm}{m}{n}{<->cmr10}{}',
+        '\\DeclareFontShape{OT1}{ptm}{m}{it}{<->cmti10}{}',
+        '\\DeclareFontShape{OT1}{ptm}{m}{sl}{<->cmsl10}{}',
+        '\\DeclareFontShape{OT1}{ptm}{b}{n}{<->cmbx10}{}',
+        '\\DeclareFontShape{OT1}{ptm}{b}{it}{<->cmbxti10}{}',
+        '\\DeclareFontShape{OT1}{ptm}{bx}{n}{<->cmbx10}{}',
+        '\\DeclareFontShape{OT1}{ptm}{bx}{it}{<->cmbxti10}{}',
+      ].join('\n'),
+    });
+  }
+  const resourcePaths = new Set(resources.map(r => r.path));
+
+
+
+  // Check if we need to auto-inject common missing class files
+  if (mainResource.content.includes('{IEEEtran}')) {
+    if (!resourcePaths.has('IEEEtran.cls')) {
+      onProgress?.('Auto-injecting missing IEEEtran.cls...');
+      try {
+        const response = await fetch('/assets/latex/IEEEtran.cls');
+        if (response.ok) {
+          const content = await response.text();
+          additionalFiles.push({ path: 'IEEEtran.cls', content });
+        } else {
+          console.warn('Failed to fetch IEEEtran.cls asset');
+        }
+      } catch (e) {
+        console.warn('Error fetching IEEEtran.cls:', e);
       }
-      pdfTeXEngine.writeMemFSFile(resource.path, bytes);
+    }
+
+  }
+
+  // Check if we need to auto-inject common missing bib style files
+  if (mainResource.content.includes('\\bibliographystyle{IEEEtran}')) {
+    if (!resourcePaths.has('IEEEtran.bst')) {
+      onProgress?.('Auto-injecting missing IEEEtran.bst...');
+      try {
+        const response = await fetch('/assets/latex/IEEEtran.bst');
+        if (response.ok) {
+          const content = await response.text();
+          additionalFiles.push({ path: 'IEEEtran.bst', content });
+        } else {
+          console.warn('Failed to fetch IEEEtran.bst asset');
+        }
+      } catch (e) {
+        console.warn('Error fetching IEEEtran.bst:', e);
+      }
     }
   }
 
-  onProgress?.('Compiling with pdflatex (local)...');
+  for (const resource of resources) {
+    if (!resource.path || resource.main) continue;
 
-  // Set the main file and compile
-  pdfTeXEngine.setEngineMainFile(mainResource.path);
-  const result = await pdfTeXEngine.compileLaTeX();
-
-  if (result.status !== 0) {
-    // Extract error from log
-    const log = result.log || '';
-    const errorMatch = log.match(/! (.+?)(?:\n|$)/);
-    throw new Error(errorMatch?.[1] || 'Local compilation failed. Check console for details.');
+    if (resource.content) {
+      additionalFiles.push({ path: resource.path, content: resource.content });
+      if (resource.path.endsWith('.bib')) hasBib = true;
+    }
+    // Note: texlyre-busytex doesn't support binary file injection via additionalFiles,
+    // so base64 images (resource.file) are skipped for local compilation.
+    // This is a known limitation — images embedded as base64 won't render locally.
   }
 
-  onProgress?.('Processing PDF output...');
+  onProgress?.('Compiling with pdflatex (local WASM)...');
 
-  // Get the PDF output
-  const pdfData = result.pdf;
-  if (!pdfData || pdfData.length === 0) {
-    throw new Error('No PDF output generated');
+  try {
+    const result = await busyTexPdfLatex.compile({
+      input: mainResource.content,
+      bibtex: hasBib,
+      additionalFiles,
+      verbose: 'silent' as const,
+      dataPackagesJs: null,
+    });
+
+    if (!result.success) {
+      // Extract meaningful error from compilation log
+      const log = result.log || '';
+      const errorMatch = log.match(/! (.+?)(?:\n|$)/);
+      const lineMatch = log.match(/l\.(\d+)/);
+      let errorMsg = errorMatch?.[1] || 'Local compilation failed';
+      if (lineMatch) errorMsg += ` (line ${lineMatch[1]})`;
+      throw new Error(errorMsg);
+    }
+
+    onProgress?.('Processing PDF output...');
+
+    if (!result.pdf || result.pdf.length === 0) {
+      throw new Error('No PDF output generated');
+    }
+
+    return new Blob([result.pdf], { type: 'application/pdf' });
+  } catch (e) {
+    if (e instanceof Error) throw e;
+    throw new Error('Local compilation failed: ' + String(e));
   }
-
-  return new Blob([pdfData], { type: 'application/pdf' });
 };
 
 export type CompilationMode = 'local' | 'api';

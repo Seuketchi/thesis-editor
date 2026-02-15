@@ -28,23 +28,23 @@ export const SettingsModal = () => {
     pros: string[];
     cons: string[];
   }> = [
-    {
-      id: 'api',
-      title: 'Cloud API',
-      description: 'Compile using YtoTech cloud service',
-      icon: <Cloud size={24} />,
-      pros: ['Full LaTeX support', 'All packages available', 'Reliable output'],
-      cons: ['Requires internet', 'Slightly slower', 'Server availability dependent'],
-    },
-    {
-      id: 'local',
-      title: 'Local (WASM)',
-      description: 'Compile in-browser using SwiftLaTeX',
-      icon: <Cpu size={24} />,
-      pros: ['Works offline', 'Fast after initial load', 'No external dependencies'],
-      cons: ['Limited package support', 'First compile is slow', 'Some features may not work'],
-    },
-  ];
+      {
+        id: 'api',
+        title: 'Cloud API',
+        description: 'Compile using YtoTech cloud service',
+        icon: <Cloud size={24} />,
+        pros: ['Full LaTeX support', 'All packages available', 'Reliable output'],
+        cons: ['Requires internet', 'Slightly slower', 'Server availability dependent'],
+      },
+      {
+        id: 'local',
+        title: 'Local (WASM)',
+        description: 'Compile in-browser using TeX Live 2025 WASM',
+        icon: <Cpu size={24} />,
+        pros: ['Works offline', 'PdfLaTeX + BibTeX', 'Non-blocking (Web Worker)'],
+        cons: ['~175MB first download', 'Limited packages', 'Experimental'],
+      },
+    ];
 
   return (
     <Dialog open={settingsOpen} onOpenChange={(open) => !open && toggleSettings()}>
@@ -117,7 +117,7 @@ export const SettingsModal = () => {
             <Info size={18} className="text-primary shrink-0 mt-0.5" />
             <p className="text-xs text-foreground/90 leading-relaxed">
               <strong className="text-foreground">Tip:</strong> Use Cloud API for full document compilation with all packages.
-              Switch to Local mode for quick edits when working offline or when the server is slow.
+              Switch to Local mode for offline work — requires WASM assets downloaded first.
             </p>
           </div>
         </div>
