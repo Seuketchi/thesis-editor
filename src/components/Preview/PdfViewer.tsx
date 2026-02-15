@@ -3,6 +3,7 @@ import { Loader2, Download } from 'lucide-react';
 import { useProjectStore } from '../../store/projectStore';
 
 import { DocumentStructure } from './DocumentStructure';
+import { PdfCanvas } from './PdfCanvas';
 import { List } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
@@ -96,23 +97,8 @@ export const PdfViewer = () => {
 
       <div className="flex-1 flex relative h-full overflow-hidden">
         {/* Main PDF View */}
-        <div className="flex-1 bg-black/5 dark:bg-black/20 relative">
-          <object
-            data={`${compilationResult.pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-            type="application/pdf"
-            className="w-full h-full block"
-          >
-            <div className="flex flex-col items-center justify-center h-full text-muted p-4 text-center">
-              <p className="mb-2">This browser does not support inline PDFs.</p>
-              <a
-                href={compilationResult.pdfUrl}
-                download="research.pdf"
-                className="text-primary hover:underline"
-              >
-                Download PDF to view
-              </a>
-            </div>
-          </object>
+        <div className="flex-1 overflow-hidden relative">
+          <PdfCanvas pdfUrl={compilationResult.pdfUrl} />
         </div>
 
         {/* Structure Sidebar */}
