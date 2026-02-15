@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { ThesisDB } from '../db';
+import { ResearchereDB } from '../db';
 
 describe('ThesisDB schema', () => {
-  it('exports a ThesisDB class', () => {
-    expect(ThesisDB).toBeDefined();
-    const db = new ThesisDB();
+  it('exports a ResearchereDB class', () => {
+    expect(ResearchereDB).toBeDefined();
+    const db = new ResearchereDB();
     expect(db.projects).toBeDefined();
     expect(db.files).toBeDefined();
     expect(db.assets).toBeDefined();
