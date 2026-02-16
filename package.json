@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy": "wrangler pages deploy dist"
+    "deploy": "npm run build && npx wrangler pages deploy dist"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
