@@ -62,6 +62,46 @@ bun test          # run tests (Vitest)
 
 ---
 
+## Deployment
+
+### Cloudflare Pages (Recommended)
+
+This project is configured for deployment on Cloudflare Pages.
+
+#### Option 1: Automatic Deployment via Git Integration
+
+1. **Connect your repository** to Cloudflare Pages
+2. **Configure build settings** in the Cloudflare dashboard:
+   - **Build command:** `npm run build`
+   - **Build output directory:** `dist`
+   - **Root directory:** (leave empty)
+   - **Environment variables:** Add any required env vars (e.g., `GEMINI_API_KEY`)
+
+3. **Important:** Do NOT add a custom deploy command. Cloudflare Pages automatically deploys the build output.
+
+#### Option 2: Manual Deployment via CLI
+
+```bash
+npm run build
+npm run deploy  # or: npx wrangler pages deploy dist
+```
+
+#### Troubleshooting
+
+**Error: "Workers-specific command in a Pages project"**
+- This means your Cloudflare dashboard has the wrong deploy command configured
+- Solution: Remove any custom deploy commands; use only `npm run build` as the build command
+- Cloudflare Pages will automatically deploy the `dist` folder after building
+
+**First-time setup:**
+```bash
+npx wrangler login
+npx wrangler pages project create researchere
+npm run deploy
+```
+
+---
+
 ## Tech Stack
 
 | | |

@@ -1,3 +1,7 @@
 name = "researchere"
 compatibility_date = "2024-02-16"
 pages_build_output_dir = "dist"
+
+# Cloudflare Pages configuration
+# This is a Pages project, not a Workers project
+# The build output directory is 'dist'
