@@ -17,6 +17,13 @@ const App = () => {
   const [showAuthScreen, setShowAuthScreen] = useState(false);
   const { sidebarVisible, previewVisible, theme, editorMode } = useProjectStore();
   const { user, profile, loading, error: authError } = useAuthStore();
+
+  // Reset auth screen if user becomes available (e.g. auto-login)
+  React.useEffect(() => {
+    if (user && showAuthScreen) {
+      setShowAuthScreen(false);
+    }
+  }, [user, showAuthScreen]);
   
   const renderEditor = () => (
     <div className={`${theme} flex flex-col h-screen w-screen bg-background text-foreground overflow-hidden`}>

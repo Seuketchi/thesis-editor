@@ -179,17 +179,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      console.log('[Auth] Event:', event);
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         if (session?.user) {
           await get().setUser(session.user);
         }
-        setTimeout(cleanUrl, 0);
+        if (event !== 'INITIAL_SESSION') {
+          setTimeout(cleanUrl, 0);
+        } else if (session?.user) {
+          cleanUrl();
+        }
       } else if (event === 'SIGNED_OUT') {
         set({ user: null, profile: null, loading: false });
         activeSyncPromise = null;
         activeSyncUserId = null;
-      } else if (event === 'INITIAL_SESSION' && session?.user) {
-        cleanUrl();
       }
     });
 
